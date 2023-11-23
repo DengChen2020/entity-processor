@@ -1,4 +1,4 @@
-package com.dc;
+package io.github.dengchen2020;
 
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Filer;
@@ -18,16 +18,22 @@ import java.util.*;
 
 /**
  * 表字段常量生成
- * @Author dengchen
- * @Date 2023/11/22
+ * {@code @Author} dengchen
+ * {@code @Date} 2023/11/22
  */
 public class EntityProcessor extends AbstractProcessor {
 
+    /**
+     * 支持的注解类型
+     */
     @Override
     public Set<String> getSupportedAnnotationTypes() {
         return Set.of("javax.persistence.Entity","jakarta.persistence.Entity");
     }
 
+    /**
+     * 支持最新版本
+     */
     @Override
     public SourceVersion getSupportedSourceVersion() {
         return SourceVersion.latestSupported();
@@ -50,7 +56,6 @@ public class EntityProcessor extends AbstractProcessor {
 
     /**
      * 生成字段常量信息
-     * @param typeElement
      */
     private void generateFieldConstants(TypeElement typeElement) {
         String packageName = processingEnv.getElementUtils().getPackageOf(typeElement).getQualifiedName().toString();
@@ -76,9 +81,6 @@ public class EntityProcessor extends AbstractProcessor {
 
     /**
      * 处理字段
-     * @param typeElement
-     * @param writer
-     * @throws IOException
      */
     private void processFields(TypeElement typeElement, Writer writer) throws IOException {
         // 先生成父类字段
@@ -106,8 +108,8 @@ public class EntityProcessor extends AbstractProcessor {
 
     /**
      * 生成字段常量名
-     * @param fieldName
-     * @return
+     * @param fieldName 字段名
+     * @return 常量名
      */
     private String constantName(String fieldName) {
         return constantValue(fieldName).toUpperCase();
@@ -115,8 +117,7 @@ public class EntityProcessor extends AbstractProcessor {
 
     /**
      * 解析元素上指定的字段常量值
-     * @param fieldElement
-     * @return
+     * @return 字段名
      */
     private Optional<String> constantValue(Element fieldElement) {
         Optional<? extends AnnotationMirror> annotationMirrorOptional = getAnnotationMirror(fieldElement, "javax.persistence.Column");
@@ -134,8 +135,8 @@ public class EntityProcessor extends AbstractProcessor {
 
     /**
      * 生成字段常量值
-     * @param fieldName
-     * @return
+     * @param fieldName 字段名
+     * @return 字段名
      */
     private String constantValue(String fieldName) {
         StringBuilder result = new StringBuilder();
@@ -157,9 +158,6 @@ public class EntityProcessor extends AbstractProcessor {
 
     /**
      * 获取指定的注解元素
-     * @param element
-     * @param annotationName
-     * @return
      */
     private Optional<? extends AnnotationMirror> getAnnotationMirror(Element element, String annotationName) {
         for (AnnotationMirror annotationMirror : element.getAnnotationMirrors()) {
@@ -172,8 +170,6 @@ public class EntityProcessor extends AbstractProcessor {
 
     /**
      * 应该忽略的元素
-     * @param fieldElement
-     * @return
      */
     private boolean shouldBeIgnored(Element fieldElement) {
         return fieldElement.getModifiers().contains(Modifier.STATIC) ||
@@ -184,9 +180,6 @@ public class EntityProcessor extends AbstractProcessor {
 
     /**
      * 是否包含某个注解
-     * @param fieldElement
-     * @param annotation
-     * @return
      */
     private boolean hasAnnotation(Element fieldElement, String annotation) {
         for (AnnotationMirror annotationMirror : fieldElement.getAnnotationMirrors()) {
@@ -201,8 +194,7 @@ public class EntityProcessor extends AbstractProcessor {
 
     /**
      * 获取文档注释
-     * @param element
-     * @return
+     * @return 文档注释
      */
     private String getJavadoc(Element element) {
         Elements elementUtils = processingEnv.getElementUtils();
