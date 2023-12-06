@@ -27,7 +27,10 @@ public class EntityProcessor extends AbstractProcessor {
      */
     @Override
     public Set<String> getSupportedAnnotationTypes() {
-        return Set.of("javax.persistence.Entity", "jakarta.persistence.Entity");
+        Set<String> annotations = new HashSet<>();
+        annotations.add("javax.persistence.Entity");
+        annotations.add("jakarta.persistence.Entity");
+        return annotations;
     }
 
     /**
@@ -98,7 +101,10 @@ public class EntityProcessor extends AbstractProcessor {
             DeclaredType declaredSuperClass = (DeclaredType) superClassType;
             Element superClassElement = declaredSuperClass.asElement();
             if (superClassElement instanceof TypeElement) {
-                processFields((TypeElement) superClassElement, writer, table, columns, updateColumns);
+                TypeElement superTypeElement = (TypeElement) superClassElement;
+                if(hasAnnotation(superTypeElement,"javax.persistence.MappedSuperclass") || hasAnnotation(superClassElement,"jakarta.persistence.MappedSuperclass")){
+                    processFields(superTypeElement, writer, table, columns, updateColumns);
+                }
             }
         }
         // 生成当前类字段
