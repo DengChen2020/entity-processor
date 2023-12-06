@@ -1,5 +1,5 @@
 # entity-processor
-实体类字段常量生成
+实体类表字段常量生成
 引入maven依赖
 ## 开始使用
 - Maven:
