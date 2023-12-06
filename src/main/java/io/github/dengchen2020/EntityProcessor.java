@@ -18,8 +18,7 @@ import java.util.*;
 
 /**
  * 表字段常量生成
- * {@code @Author} dengchen
- * {@code @Date} 2023/11/22
+ * @author dengchen
  */
 public class EntityProcessor extends AbstractProcessor {
 
@@ -28,7 +27,7 @@ public class EntityProcessor extends AbstractProcessor {
      */
     @Override
     public Set<String> getSupportedAnnotationTypes() {
-        return Set.of("javax.persistence.Entity","jakarta.persistence.Entity");
+        return Set.of("javax.persistence.Entity", "jakarta.persistence.Entity");
     }
 
     /**
@@ -65,31 +64,41 @@ public class EntityProcessor extends AbstractProcessor {
             JavaFileObject sourceFile = filer.createSourceFile(packageName + "." + className);
             try (Writer writer = sourceFile.openWriter()) {
                 writer.write("package " + packageName + ";\n\n");
+                writer.write("import java.util.List;\n\n");
                 writer.write("import javax.annotation.processing.Generated;\n\n");
                 writer.write("@Generated(value =\"" + this.getClass().getName() + "\", date =\"" +
                         new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) +
                         "\", comments =\"根据" + typeElement.getQualifiedName().toString() + "自动生成\")\n");
                 writer.write("public class " + className + " {\n\n");
                 // 生成字段常量
-                processFields(typeElement, writer);
+                String table = getTableName(typeElement);
+                String tableName = backQuote(table);
+                writer.write("    public static final String TABLE_NAME = \"" + tableName + "\";\n\n");
+                List<String> columns = new ArrayList<>();
+                List<String> updateColumns = new ArrayList<>();
+                processFields(typeElement, writer, table, columns,updateColumns);
+                writer.write("    " + "/**\n     *" + " 所有字段\n" + "     */\n");
+                writer.write("    public static final List<String> ALL_COLUMN = List.of(\"" + String.join("\",\"", columns) + "\");\n\n");
+                writer.write("    " + "/**\n     *" + " 要更新的所有字段\n" + "     */\n");
+                writer.write("    public static final List<String> UPDATE_COLUMNS = List.of(\"" + String.join("\",\"", updateColumns) + "\");\n\n");
                 writer.write("}\n");
             }
         } catch (IOException e) {
-            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,e.toString());
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, e.toString());
         }
     }
 
     /**
      * 处理字段
      */
-    private void processFields(TypeElement typeElement, Writer writer) throws IOException {
+    private void processFields(TypeElement typeElement, Writer writer, String table, List<String> columns, List<String> updateColumns) throws IOException {
         // 先生成父类字段
         TypeMirror superClassType = typeElement.getSuperclass();
         if (superClassType.getKind() == TypeKind.DECLARED) {
             DeclaredType declaredSuperClass = (DeclaredType) superClassType;
             Element superClassElement = declaredSuperClass.asElement();
             if (superClassElement instanceof TypeElement) {
-                processFields((TypeElement) superClassElement, writer);
+                processFields((TypeElement) superClassElement, writer, table, columns, updateColumns);
             }
         }
         // 生成当前类字段
@@ -99,8 +108,16 @@ public class EntityProcessor extends AbstractProcessor {
                 if (!shouldBeIgnored(enclosedElement)) {
                     String constantName = constantName(fieldName);
                     String constantValue = constantValue(enclosedElement).orElseGet(() -> constantValue(fieldName));
-                    writer.write("    "+"/**\n     *"+getJavadoc(enclosedElement)+"     */\n");
-                    writer.write("    public static final String " + constantName + " = \"" + constantValue + "\";\n\n");
+                    writer.write("    " + "/**\n     *" + getJavadoc(enclosedElement) + "     */\n");
+                    String column = backQuote(table) + "." + backQuote(constantValue);
+                    writer.write("    public static final String " + constantName + " = \"" + column + "\";\n\n");
+                    columns.add(column);
+                    if (hasAnnotation(enclosedElement, "javax.persistence.Id") || hasAnnotation(enclosedElement, "jakarta.persistence.Id")) {
+                        writer.write("    " + "/**\n     *" + " 数据库主键\n" + "     */\n");
+                        writer.write("    public static final String $$ID = \"" + column + "\";\n\n");
+                    }else {
+                        updateColumns.add(column);
+                    }
                 }
             }
         }
@@ -108,6 +125,7 @@ public class EntityProcessor extends AbstractProcessor {
 
     /**
      * 生成字段常量名
+     *
      * @param fieldName 字段名
      * @return 常量名
      */
@@ -117,11 +135,12 @@ public class EntityProcessor extends AbstractProcessor {
 
     /**
      * 解析元素上指定的字段常量值
+     *
      * @return 字段名
      */
     private Optional<String> constantValue(Element fieldElement) {
         Optional<? extends AnnotationMirror> annotationMirrorOptional = getAnnotationMirror(fieldElement, "javax.persistence.Column");
-        annotationMirrorOptional = annotationMirrorOptional.equals(Optional.empty()) ? getAnnotationMirror(fieldElement,"jakarta.persistence.Column") : annotationMirrorOptional;
+        annotationMirrorOptional = annotationMirrorOptional.equals(Optional.empty()) ? getAnnotationMirror(fieldElement, "jakarta.persistence.Column") : annotationMirrorOptional;
         if (annotationMirrorOptional.isPresent()) {
             Map<? extends ExecutableElement, ? extends AnnotationValue> elementValues = annotationMirrorOptional.get().getElementValues();
             for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : elementValues.entrySet()) {
@@ -135,6 +154,7 @@ public class EntityProcessor extends AbstractProcessor {
 
     /**
      * 生成字段常量值
+     *
      * @param fieldName 字段名
      * @return 字段名
      */
@@ -154,6 +174,29 @@ public class EntityProcessor extends AbstractProcessor {
             isFirst = false;
         }
         return result.toString();
+    }
+
+    private String getTableName(TypeElement element) {
+        Optional<? extends AnnotationMirror> annotationMirrorOptional = getAnnotationMirror(element, "javax.persistence.Table");
+        annotationMirrorOptional = annotationMirrorOptional.equals(Optional.empty()) ? getAnnotationMirror(element, "jakarta.persistence.Table") : annotationMirrorOptional;
+        if (annotationMirrorOptional.isPresent()) {
+            Map<? extends ExecutableElement, ? extends AnnotationValue> elementValues = annotationMirrorOptional.get().getElementValues();
+            for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : elementValues.entrySet()) {
+                if ("name".equals(entry.getKey().getSimpleName().toString())) {
+                    return entry.getValue().getValue().toString();
+                }
+            }
+        }
+        return element.getSimpleName().toString();
+    }
+
+    /**
+     * 添加反引号
+     *
+     * @param column 字段名
+     */
+    public static String backQuote(String column) {
+        return "`" + column + "`";
     }
 
     /**
@@ -194,6 +237,7 @@ public class EntityProcessor extends AbstractProcessor {
 
     /**
      * 获取文档注释
+     *
      * @return 文档注释
      */
     private String getJavadoc(Element element) {

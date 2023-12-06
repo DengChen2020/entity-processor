@@ -4,7 +4,7 @@
 
   <groupId>io.github.dengchen2020</groupId>
   <artifactId>entity-processor</artifactId>
-  <version>1.0.0</version>
+  <version>1.0.1</version>
   <packaging>jar</packaging>
 
   <developers>
@@ -17,7 +17,7 @@
 
   <name>entity-processor</name>
   <url>https://github.com/DengChen2020/entity-processor</url>
-  <description>实体类处理</description>
+  <description>实体类处理，生成表字段常量</description>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
