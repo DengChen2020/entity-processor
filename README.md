@@ -1,6 +1,6 @@
 # entity-processor
 实体类表字段常量生成
-引入maven依赖
+引入maven依赖，加JPA注解即可自动生成
 ## 开始使用
 - Maven:
 ```xml
