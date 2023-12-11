@@ -67,23 +67,26 @@ public class EntityProcessor extends AbstractProcessor {
             JavaFileObject sourceFile = filer.createSourceFile(packageName + "." + className);
             try (Writer writer = sourceFile.openWriter()) {
                 writer.write("package " + packageName + ";\n\n");
-                writer.write("import java.util.List;\n\n");
-                writer.write("import javax.annotation.processing.Generated;\n\n");
-                writer.write("@Generated(value =\"" + this.getClass().getName() + "\", date =\"" +
-                        new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) +
-                        "\", comments =\"根据" + typeElement.getQualifiedName().toString() + "自动生成\")\n");
+                writer.write("import java.util.List;\n");
+                writer.write("import java.util.Arrays;\n\n");
+//                writer.write("import javax.annotation.processing.Generated;\n\n");
+                writer.write("/**\n * 根据"+typeElement.getQualifiedName().toString()+"自动生成\n * 生成日期："+new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date())+"\n */\n");
+//                writer.write("@Generated(value =\"" + this.getClass().getName() + "\", date =\"" +
+//                        new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) +
+//                        "\", comments =\"根据" + typeElement.getQualifiedName().toString() + "自动生成\")\n");
                 writer.write("public class " + className + " {\n\n");
                 // 生成字段常量
                 String table = getTableName(typeElement);
                 String tableName = backQuote(table);
+                writer.write("    " + "/**\n     *" + " 表名\n" + "     */\n");
                 writer.write("    public static final String TABLE_NAME = \"" + tableName + "\";\n\n");
                 List<String> columns = new ArrayList<>();
                 List<String> updateColumns = new ArrayList<>();
                 processFields(typeElement, writer, table, columns,updateColumns);
                 writer.write("    " + "/**\n     *" + " 所有字段\n" + "     */\n");
-                writer.write("    public static final List<String> ALL_COLUMN = List.of(\"" + String.join("\",\"", columns) + "\");\n\n");
+                writer.write("    public static final List<String> ALL_COLUMN = Arrays.asList(\"" + String.join("\",\"", columns) + "\");\n\n");
                 writer.write("    " + "/**\n     *" + " 要更新的所有字段\n" + "     */\n");
-                writer.write("    public static final List<String> UPDATE_COLUMNS = List.of(\"" + String.join("\",\"", updateColumns) + "\");\n\n");
+                writer.write("    public static final List<String> UPDATE_COLUMNS = Arrays.asList(\"" + String.join("\",\"", updateColumns) + "\");\n\n");
                 writer.write("}\n");
             }
         } catch (IOException e) {
