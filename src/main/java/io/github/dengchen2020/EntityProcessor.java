@@ -79,14 +79,14 @@ public class EntityProcessor extends AbstractProcessor {
                 String table = getTableName(typeElement);
                 String tableName = backQuote(table);
                 writer.write("    " + "/**\n     *" + " 表名\n" + "     */\n");
-                writer.write("    public static final String TABLE_NAME = \"" + tableName + "\";\n\n");
+                writer.write("    public static final String tableName = \"" + tableName + "\";\n\n");
                 List<String> columns = new ArrayList<>();
                 List<String> updateColumns = new ArrayList<>();
                 processFields(typeElement, writer, table, columns,updateColumns);
                 writer.write("    " + "/**\n     *" + " 所有字段\n" + "     */\n");
-                writer.write("    public static final List<String> ALL_COLUMN = Arrays.asList(\"" + String.join("\",\"", columns) + "\");\n\n");
+                writer.write("    public static final List<String> allColumn = Arrays.asList(\"" + String.join("\",\"", columns) + "\");\n\n");
                 writer.write("    " + "/**\n     *" + " 要更新的所有字段\n" + "     */\n");
-                writer.write("    public static final List<String> UPDATE_COLUMNS = Arrays.asList(\"" + String.join("\",\"", updateColumns) + "\");\n\n");
+                writer.write("    public static final List<String> updateColumns = Arrays.asList(\"" + String.join("\",\"", updateColumns) + "\");\n\n");
                 writer.write("}\n");
             }
         } catch (IOException e) {
@@ -123,7 +123,7 @@ public class EntityProcessor extends AbstractProcessor {
                     columns.add(column);
                     if (hasAnnotation(enclosedElement, "javax.persistence.Id") || hasAnnotation(enclosedElement, "jakarta.persistence.Id")) {
                         writer.write("    " + "/**\n     *" + " 数据库主键\n" + "     */\n");
-                        writer.write("    public static final String $$ID = \"" + column + "\";\n\n");
+                        writer.write("    public static final String $$id = \"" + column + "\";\n\n");
                     }else {
                         updateColumns.add(column);
                     }
@@ -139,7 +139,7 @@ public class EntityProcessor extends AbstractProcessor {
      * @return 常量名
      */
     private String constantName(String fieldName) {
-        return constantValue(fieldName).toUpperCase();
+        return fieldName;
     }
 
     /**
