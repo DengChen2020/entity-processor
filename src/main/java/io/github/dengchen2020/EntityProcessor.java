@@ -1,7 +1,11 @@
 package io.github.dengchen2020;
 
+import io.github.dengchen2020.annotation.ColumnTablePrefix;
+import io.github.dengchen2020.annotation.NamingStrategy;
+
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Filer;
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
@@ -16,11 +20,31 @@ import java.io.Writer;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+import static io.github.dengchen2020.annotation.NamingStrategy.*;
+
 /**
  * 表字段常量生成
+ *
  * @author dengchen
  */
 public class EntityProcessor extends AbstractProcessor {
+
+    private Map<String, String> options;
+
+    private boolean enableColumnTablePrefix;
+
+    private String identifierQuoting;
+
+    private String namingStrategy;
+
+    @Override
+    public synchronized void init(final ProcessingEnvironment processingEnv) {
+        super.init(processingEnv);
+        options = processingEnv.getOptions();
+        enableColumnTablePrefix = Boolean.parseBoolean(options.getOrDefault("enableColumnTablePrefix", "false"));
+        identifierQuoting = options.getOrDefault("identifierQuoting", "");
+        namingStrategy = options.getOrDefault("namingStrategy", SNAKE_CASE);
+    }
 
     /**
      * 支持的注解类型
@@ -70,19 +94,32 @@ public class EntityProcessor extends AbstractProcessor {
                 writer.write("import java.util.List;\n");
                 writer.write("import java.util.Arrays;\n\n");
 //                writer.write("import javax.annotation.processing.Generated;\n\n");
-                writer.write("/**\n * 根据"+typeElement.getQualifiedName().toString()+"自动生成\n * 生成日期："+new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date())+"\n */\n");
+                writer.write("/**\n * 根据" + typeElement.getQualifiedName().toString() + "自动生成\n * 生成日期：" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + "\n */\n");
 //                writer.write("@Generated(value =\"" + this.getClass().getName() + "\", date =\"" +
 //                        new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) +
 //                        "\", comments =\"根据" + typeElement.getQualifiedName().toString() + "自动生成\")\n");
                 writer.write("public class " + className + " {\n\n");
                 // 生成字段常量
                 String table = getTableName(typeElement);
-                String tableName = backQuote(table);
+                String tableName = identifierQuoting(table);
                 writer.write("    " + "/**\n     *" + " 表名\n" + "     */\n");
                 writer.write("    public static final String tableName = \"" + tableName + "\";\n\n");
                 List<String> columns = new ArrayList<>();
                 List<String> updateColumns = new ArrayList<>();
-                processFields(typeElement, writer, table, columns,updateColumns);
+                String namingStrategy;
+                if (hasAnnotation(typeElement, NamingStrategy.class.getName())) {
+                    NamingStrategy namingStrategyAn = typeElement.getAnnotation(NamingStrategy.class);
+                    namingStrategy = namingStrategyAn.value();
+                } else {
+                    namingStrategy = this.namingStrategy;
+                }
+                boolean enableColumnTablePrefix;
+                if (hasAnnotation(typeElement, ColumnTablePrefix.class.getName())) {
+                    enableColumnTablePrefix = true;
+                } else {
+                    enableColumnTablePrefix = this.enableColumnTablePrefix;
+                }
+                processFields(typeElement, writer, table, columns, updateColumns, namingStrategy, enableColumnTablePrefix);
                 writer.write("    " + "/**\n     *" + " 所有字段\n" + "     */\n");
                 writer.write("    public static final List<String> allColumn = Arrays.asList(\"" + String.join("\",\"", columns) + "\");\n\n");
                 writer.write("    " + "/**\n     *" + " 要更新的所有字段\n" + "     */\n");
@@ -97,7 +134,7 @@ public class EntityProcessor extends AbstractProcessor {
     /**
      * 处理字段
      */
-    private void processFields(TypeElement typeElement, Writer writer, String table, List<String> columns, List<String> updateColumns) throws IOException {
+    private void processFields(TypeElement typeElement, Writer writer, String table, List<String> columns, List<String> updateColumns, String namingStrategy, boolean enableColumnTablePrefix) throws IOException {
         // 先生成父类字段
         TypeMirror superClassType = typeElement.getSuperclass();
         if (superClassType.getKind() == TypeKind.DECLARED) {
@@ -105,8 +142,8 @@ public class EntityProcessor extends AbstractProcessor {
             Element superClassElement = declaredSuperClass.asElement();
             if (superClassElement instanceof TypeElement) {
                 TypeElement superTypeElement = (TypeElement) superClassElement;
-                if(hasAnnotation(superTypeElement,"javax.persistence.MappedSuperclass") || hasAnnotation(superClassElement,"jakarta.persistence.MappedSuperclass")){
-                    processFields(superTypeElement, writer, table, columns, updateColumns);
+                if (hasAnnotation(superTypeElement, "javax.persistence.MappedSuperclass") || hasAnnotation(superClassElement, "jakarta.persistence.MappedSuperclass")) {
+                    processFields(superTypeElement, writer, table, columns, updateColumns, namingStrategy, enableColumnTablePrefix);
                 }
             }
         }
@@ -116,15 +153,18 @@ public class EntityProcessor extends AbstractProcessor {
                 String fieldName = enclosedElement.getSimpleName().toString();
                 if (!shouldBeIgnored(enclosedElement)) {
                     String constantName = constantName(fieldName);
-                    String constantValue = constantValue(enclosedElement).orElseGet(() -> constantValue(fieldName));
-                    writer.write("    " + "/**\n     *" + getJavadoc(enclosedElement) + "     */\n");
-                    String column = backQuote(table) + "." + backQuote(constantValue);
+                    String constantValue = getColumnValue(enclosedElement).orElseGet(() -> constantValue(fieldName, namingStrategy));
+                    String javadoc = getJavadoc(enclosedElement);
+                    if (!Objects.isNull(javadoc) && !javadoc.isEmpty()) {
+                        writer.write("    " + "/**\n     *" + getJavadoc(enclosedElement) + "     */\n");
+                    }
+                    String column = enableColumnTablePrefix ? identifierQuoting(table) + "." + identifierQuoting(constantValue) : identifierQuoting(constantValue);
                     writer.write("    public static final String " + constantName + " = \"" + column + "\";\n\n");
                     columns.add(column);
                     if (hasAnnotation(enclosedElement, "javax.persistence.Id") || hasAnnotation(enclosedElement, "jakarta.persistence.Id")) {
                         writer.write("    " + "/**\n     *" + " 数据库主键\n" + "     */\n");
                         writer.write("    public static final String $$id = \"" + column + "\";\n\n");
-                    }else {
+                    } else {
                         updateColumns.add(column);
                     }
                 }
@@ -147,7 +187,7 @@ public class EntityProcessor extends AbstractProcessor {
      *
      * @return 字段名
      */
-    private Optional<String> constantValue(Element fieldElement) {
+    private Optional<String> getColumnValue(Element fieldElement) {
         Optional<? extends AnnotationMirror> annotationMirrorOptional = getAnnotationMirror(fieldElement, "javax.persistence.Column");
         annotationMirrorOptional = annotationMirrorOptional.equals(Optional.empty()) ? getAnnotationMirror(fieldElement, "jakarta.persistence.Column") : annotationMirrorOptional;
         if (annotationMirrorOptional.isPresent()) {
@@ -167,22 +207,31 @@ public class EntityProcessor extends AbstractProcessor {
      * @param fieldName 字段名
      * @return 字段名
      */
-    private String constantValue(String fieldName) {
-        StringBuilder result = new StringBuilder();
-        boolean isFirst = true;
-        for (int i = 0; i < fieldName.length(); i++) {
-            char currentChar = fieldName.charAt(i);
-            if (Character.isUpperCase(currentChar)) {
-                if (!isFirst) {
-                    result.append("_");
-                }
-                result.append(Character.toLowerCase(currentChar));
-            } else {
-                result.append(currentChar);
+    private String constantValue(String fieldName, String namingStrategy) {
+        if (namingStrategy.equals(PASCAL_CASE)) {
+            if (fieldName.length() <= 1) {
+                return fieldName;
             }
-            isFirst = false;
+            return String.valueOf(fieldName.charAt(0)).toUpperCase() + fieldName.substring(1);
+        } else if (namingStrategy.equals(SNAKE_CASE)) {
+            StringBuilder result = new StringBuilder();
+            boolean isFirst = true;
+            for (int i = 0; i < fieldName.length(); i++) {
+                char currentChar = fieldName.charAt(i);
+                if (Character.isUpperCase(currentChar)) {
+                    if (!isFirst) {
+                        result.append("_");
+                    }
+                    result.append(Character.toLowerCase(currentChar));
+                } else {
+                    result.append(currentChar);
+                }
+                isFirst = false;
+            }
+            return result.toString();
+        } else {
+            return fieldName;
         }
-        return result.toString();
     }
 
     private String getTableName(TypeElement element) {
@@ -200,12 +249,12 @@ public class EntityProcessor extends AbstractProcessor {
     }
 
     /**
-     * 添加反引号
+     * 添加引用标识符
      *
      * @param column 字段名
      */
-    public static String backQuote(String column) {
-        return "`" + column + "`";
+    public String identifierQuoting(String column) {
+        return identifierQuoting + column + identifierQuoting;
     }
 
     /**
