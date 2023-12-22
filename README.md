@@ -7,7 +7,7 @@
 <dependency>
     <groupId>io.github.dengchen2020</groupId>
     <artifactId>entity-processor</artifactId>
-    <version>1.0.4</version>
+    <version>1.0.5</version>
 </dependency>
 ```
 自动识别@Entity,@Column，@Transient等JPA注解生成字段常量类
